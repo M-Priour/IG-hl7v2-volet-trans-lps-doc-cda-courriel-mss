@@ -1,22 +1,63 @@
-name: Workflow Release to IG-website-release
+name: Release IG
+
 on:
   workflow_call:
-
   workflow_dispatch:
+
+
+
+
+# The following jobs are equal for all IGs and can be moved to a common composite-action if 'uses'-support is added, see:
+# https://github.com/actions/runner/blob/main/docs/adrs/1144-composite-actions.md
 jobs:
-  run-release:
+  publish:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+
+      - name: Get IG-terminology-website-release
+        uses: actions/checkout@main
+        with:
+          persist-credentials: false
+          repository: ansforge/ansforge/IG-website-release
+          path: IG-terminology-website-release
+
+      - name: Init        
+        run: |
+          cd  IG-terminology-website-release
+          git submodule update --init --recursive
+          
+      - uses: actions/checkout@v4
         with:      
           path: igSource
-      - uses: ansforge/IG-workflows@main
-        with:      
-          repo_ig: "./igSource"   
-          github_page: "true"
-          github_page_token: ${{ secrets.GITHUB_TOKEN }}
-          bake: "false"
-          validator_cli: "false"
-          publish_repo: "ansforge/IG-website-release"
-          publish_repo_token :  ${{ secrets.ANS_IG_API_TOKEN }} 
-          publish_path_outpout : "./IG-website-release/www/ig/hl7v2"
+      
+
+
+        
+      - name: Install modules
+        run: npm install -g fsh-sushi
+ 
+
+      - name: Run sushi 
+        run: sushi ./igSource
+        
+      # Builds the HTML page for the IG.
+      - name: 🏃‍♂️ Run IG Publisher
+        run : |
+              cd  ./igSource
+              java -Xmx16344m -jar ../publisher.jar   -ig .  
+     
+
+          
+
+
+
+      # Builds the HTML page for the IG.
+      - name: 🏃‍♂️ Generate package registry
+        run : java -Dfile.encoding=UTF-8 -jar publisher.jar -generate-package-registry ./IG-terminology-website-release
+        
+      - name: 🏃‍♂️ Run  Publisher to release
+        run :   java -Xmx16344m  -Dfile.encoding=UTF-8 -jar publisher.jar -go-publish -source igSource  -web  ./IG-terminology-website-release/www/ -registry ./IG-terminology-website-release/ig-registry/fhir-ig-list.json -history ./IG-terminology-website-release/fhir-ig-history-template -templates ./IG-terminology-website-release/templates    -temp      /home/runner/work/publication/temp 
+
+
+        
+
